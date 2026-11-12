@@ -1,19 +1,33 @@
 name: build
 on: [workflow_dispatch, push]
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
         with:
-          submodules: recursive
-      - name: Build
-        shell: bash
+          distribution: temurin
+          java-version: 25
+          cache: gradle
+
+      - name: Install Vulkan SDK
+        shell: pwsh
         run: |
-          # замени на команду из таблицы ниже
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release
+          curl.exe -fsSL -o "$env:RUNNER_TEMP\vulkan-sdk.exe" https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe
+          Start-Process -Wait -FilePath "$env:RUNNER_TEMP\vulkan-sdk.exe" -ArgumentList '--root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install'
+          if (-not (Test-Path C:\VulkanSDK\Bin\glslc.exe)) { throw 'Vulkan SDK install failed' }
+          "VULKAN_SDK=C:\VulkanSDK" >> $env:GITHUB_ENV
+          "C:\VulkanSDK\Bin" >> $env:GITHUB_PATH
+
+      - name: Build
+        shell: pwsh
+        run: ./gradlew.bat build
+
       - uses: actions/upload-artifact@v4
         with:
-          name: build
-          path: build/   # папка с результатом сборки
+          name: astatine
+          path: build/libs/*.jar
+          if-no-files-found: error
